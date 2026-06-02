@@ -1,0 +1,46 @@
+# Python default ignore files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Project specific large files (Hyperspectral data & model checkpoints)
+data/
+*.mat
+*.tif
+*.gz
+checkpoint_best.pth
+
+# Logs and outputs
+.ipynb_checkpoints
+results/*
+!results/summary_metrics.txt
+*.log
+
+

@@ -1,0 +1,83 @@
+data:
+  band_selection: continuous
+  data_dirs:
+    EO_10by10_nobel_score: ../dis-dataset/NASA_EO_1_nobel_score
+    NASA_AVIRIS_10by10_nobel_score: ../dis-dataset/NASA_AVIRIS_nobel_score
+    NEON_10by10_nobel_score: ../dis-dataset/NEON_nobel_score
+    Spectral_Earth_10by10_nobel_score: ../dis-dataset/Spectral_Earth_nobel_score
+  normalization:
+    clip_outliers: true
+    clip_percentile:
+    - 1
+    - 99
+    method: zscore
+  remove_padding: true
+  sample_sizes:
+    EO_10by10_nobel_score: 133333
+    NASA_AVIRIS_10by10_nobel_score: 266667
+    NEON_10by10_nobel_score: 133333
+    Spectral_Earth_10by10_nobel_score: 266667
+  target_bands: 80
+device:
+  cuda: true
+  distributed: false
+  gpu_ids:
+  - 0
+  port: 25671
+model:
+  contrastive: true
+  contrastive_weight: 0.1
+  date: '20260116'
+  decoder_embed_dim: 128
+  decoder_num_heads: 16
+  depth: 8
+  embed_dim: 128
+  local_window_size: 7
+  loss_freq_weight: 0.1
+  loss_grad_weight: 0.2
+  loss_mse_weight: 1.0
+  loss_sam_weight: 0.3
+  mask_ratio: 0.75
+  masking_strategy: block
+  mlp_ratio: 4.0
+  noise_level: 0.01
+  num_heads: 16
+  patch_size: 1
+  proj_dim: 128
+  scale_range:
+  - 0.8
+  - 1.2
+  temperature: 0.5
+  type: spectral_foundation_v2
+  use_local_global_attention: true
+  version: v71
+path:
+  log_dir: ./artifacts/refactored_experiments/logs
+  output_dir: ./refactored_experiments/checkpoints
+  pretrained_model: spectral_fm_mae_v2.pt
+train:
+  batch_size: 256
+  checkpoint_interval: 1
+  debug: false
+  early_stopping:
+    enabled: true
+    min_delta: 0.0001
+    patience: 30
+  epochs: 600
+  gradient_accumulation_steps: 1
+  gradient_checkpointing: false
+  gradient_clip_norm: 1.0
+  learning_rate: 0.0001
+  log_interval: 10
+  num_workers: 16
+  scheduler:
+    enabled: true
+    factor: 0.5
+    min_lr: 1.0e-06
+    mode: min
+    patience: 20
+    type: CosineAnnealingWarmup
+    verbose: true
+    warmup_epochs: 10
+  verbose: true
+  weight_decay: 0.05

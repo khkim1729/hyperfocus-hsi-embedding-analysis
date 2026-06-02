@@ -1,0 +1,9 @@
+=== Hyperfocus HSI Embedding Analysis Summary ===
+
+| Dataset            | Valid Pixels | Raw k-NN F1  | Emb k-NN F1  | Improvement  |
+|--------------------|--------------|--------------|--------------|--------------|
+| Indian Pines       | 10,249       | 0.7371       | 0.8785       |      +0.1415 |
+| Botswana           | 3,248        | 0.9271       | 0.9363       |      +0.0092 |
+| Pavia University   | 148,152      | 0.9270       | 0.9403       |      +0.0132 |
+| Pavia Centre       | 148,152      | 0.9270       | 0.9403       |      +0.0132 |
+| HyRank             | 20,024       | 0.9150       | 0.9286       |      +0.0135 |
