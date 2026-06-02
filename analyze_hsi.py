@@ -10,7 +10,9 @@ from sklearn.decomposition import PCA
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import classification_report, cohen_kappa_score, f1_score
+from sklearn.preprocessing import StandardScaler
 from load_model import load_encoder
+
 
 # 출력 및 이미지 디렉토리 설정
 os.makedirs("images", exist_ok=True)
@@ -142,6 +144,37 @@ def extract_embeddings(X_norm, band_dim, wavelengths=None, device="cpu"):
 # 4. 분석 및 시각화 파이프라인
 # ==========================================
 
+CLASS_NAMES = {
+    "Indian Pines": {
+        1: "Alfalfa", 2: "Corn-notill", 3: "Corn-mintill", 4: "Corn",
+        5: "Grass-pasture", 6: "Grass-trees", 7: "Grass-pasture-mowed",
+        8: "Hay-windrowed", 9: "Oats", 10: "Soybean-notill",
+        11: "Soybean-mintill", 12: "Soybean-clean", 13: "Wheat",
+        14: "Woods", 15: "Buildings-Grass-Trees-Drives", 16: "Stone-Steel-Towers"
+    },
+    "Botswana": {
+        1: "Water", 2: "Hippo grass", 3: "Floodplain grasses 1", 4: "Floodplain grasses 2",
+        5: "Reeds", 6: "Riparian", 7: "Firescar", 8: "Island interior",
+        9: "Acacia woodlands", 10: "Acacia shrublands", 11: "Acacia grasslands",
+        12: "Short mopane", 13: "Mixed mopane", 14: "Exposed soils"
+    },
+    "Pavia University": {
+        1: "Asphalt", 2: "Meadows", 3: "Gravel", 4: "Trees",
+        5: "Painted metal sheets", 6: "Bare Soil", 7: "Bitumen",
+        8: "Self-blocking bricks", 9: "Shadows"
+    },
+    "Pavia Centre": {
+        1: "Water", 2: "Trees", 3: "Asphalt", 4: "Self-blocking bricks",
+        5: "Bitumen", 6: "Tiles", 7: "Shadows", 8: "Meadows", 9: "Bare Soil"
+    },
+    "HyRank": {
+        1: "Dense Urban Fabric", 2: "Mineral Extraction Sites", 3: "Non-irrigated Arable Land",
+        4: "Fruit Trees", 5: "Olive Groves", 6: "Coniferous Forest", 7: "Deciduous Forest",
+        8: "Mixed Forest", 9: "Sparsely Vegetated Areas", 10: "Water Courses",
+        11: "Water Bodies", 12: "Wetland", 13: "Salt Marshes", 14: "Natural Grassland"
+    }
+}
+
 def run_analysis_pipeline(dataset_name, img, gt, wavelengths=None):
     print(f"\n=== Starting Analysis for {dataset_name} ===")
     H, W, C = img.shape
@@ -168,6 +201,10 @@ def run_analysis_pipeline(dataset_name, img, gt, wavelengths=None):
         
     X_emb = extract_embeddings(X_norm, band_dim=C, wavelengths=wl_tensor, device=DEVICE)
     print(f"Extracted embedding shape: {X_emb.shape}")
+    
+    # 임베딩 특징 공간의 Z-score 표준 스케일링 수행 (기하학적 거리 및 분리도 극대화)
+    scaler = StandardScaler()
+    X_emb = scaler.fit_transform(X_emb)
     
     # 4. k-NN 평가 (Raw vs Embedding)
     # computational cost 절감을 위해 픽셀이 너무 많으면 Stratified Sampling
@@ -225,6 +262,7 @@ def run_analysis_pipeline(dataset_name, img, gt, wavelengths=None):
         vis_indices = []
         for cls, count in zip(classes, counts):
             cls_indices = np.where(y_valid == cls)[0]
+            # 클래스가 소수라도 최소 30개는 포함되도록 설정하여 16개 클래스가 다 나타나도록 보장
             n_samples = min(len(cls_indices), max(30, int(count * (vis_limit / len(y_valid)))))
             sampled = np.random.choice(cls_indices, n_samples, replace=False)
             vis_indices.extend(sampled)
@@ -237,10 +275,17 @@ def run_analysis_pipeline(dataset_name, img, gt, wavelengths=None):
     y_vis = y_valid[vis_indices]
     
     print(f"Running t-SNE for visualization ({len(y_vis)} points)...")
-    # t-SNE 계산
-    tsne = TSNE(n_components=2, perplexity=30, random_state=42, max_iter=1000)
-    X_emb_tsne = tsne.fit_transform(X_emb_vis)
-    X_raw_tsne = tsne.fit_transform(X_raw_vis)
+    # t-SNE 시각화 전, 고차원 데이터의 주성분 50차원으로 pre-reduction 수행 (잡음 제거 및 분리도 극대화)
+    pca_pre_emb = PCA(n_components=min(50, X_emb_vis.shape[1]), random_state=42)
+    X_emb_vis_pca_pre = pca_pre_emb.fit_transform(X_emb_vis)
+    
+    pca_pre_raw = PCA(n_components=min(50, X_raw_vis.shape[1]), random_state=42)
+    X_raw_vis_pca_pre = pca_pre_raw.fit_transform(X_raw_vis)
+    
+    # t-SNE 계산 (더 강력한 군집 분리도를 위해 max_iter 및 perplexity 조정)
+    tsne = TSNE(n_components=2, perplexity=45, random_state=42, max_iter=2000, init='pca')
+    X_emb_tsne = tsne.fit_transform(X_emb_vis_pca_pre)
+    X_raw_tsne = tsne.fit_transform(X_raw_vis_pca_pre)
     
     # PCA 계산 (비교용)
     pca = PCA(n_components=2, random_state=42)
@@ -248,38 +293,54 @@ def run_analysis_pipeline(dataset_name, img, gt, wavelengths=None):
     X_raw_pca = pca.fit_transform(X_raw_vis)
     
     # 시각화 그림 그리기
-    fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
     
-    # 고유 클래스 목록 및 아름다운 색상 매핑 생성
-    unique_classes = np.unique(y_vis)
-    cmap = plt.get_cmap("tab20", len(unique_classes))
+    # 정렬된 고유 클래스 목록 및 아름다운 색상 매핑 생성
+    unique_classes = sorted(np.unique(y_vis))
+    cmap = plt.get_cmap("tab20")
     
-    # 1. Raw Spectrum PCA
-    scatter_raw_pca = axes[0, 0].scatter(X_raw_pca[:, 0], X_raw_pca[:, 1], c=y_vis, cmap=cmap, s=12, alpha=0.7)
+    legend_handles = []
+    names_dict = CLASS_NAMES.get(dataset_name, {})
+    
+    # 모든 클래스를 루프 돌며 명시적으로 그리고 범례를 수집 (누락/병합되는 클래스 제거)
+    for cls in unique_classes:
+        cls_mask = (y_vis == cls)
+        # 클래스 번호에 일치하는 tab20 색상 부여
+        color_idx = (cls - 1) % 20
+        color = cmap(color_idx)
+        
+        label_text = f"Class {cls}: {names_dict.get(cls, f'Unknown {cls}')}"
+        
+        # 1. Raw Spectrum PCA
+        axes[0, 0].scatter(X_raw_pca[cls_mask, 0], X_raw_pca[cls_mask, 1], color=color, s=12, alpha=0.7)
+        
+        # 2. Embedding PCA
+        axes[0, 1].scatter(X_emb_pca[cls_mask, 0], X_emb_pca[cls_mask, 1], color=color, s=12, alpha=0.7)
+        
+        # 3. Raw Spectrum t-SNE
+        axes[1, 0].scatter(X_raw_tsne[cls_mask, 0], X_raw_tsne[cls_mask, 1], color=color, s=12, alpha=0.7)
+        
+        # 4. Embedding t-SNE (범례용으로 핸들 수집)
+        sc = axes[1, 1].scatter(X_emb_tsne[cls_mask, 0], X_emb_tsne[cls_mask, 1], color=color, s=12, alpha=0.7, label=label_text)
+        legend_handles.append(sc)
+        
     axes[0, 0].set_title(f"Raw Spectrum PCA ({dataset_name})", fontsize=12, fontweight='bold')
     axes[0, 0].grid(True, linestyle='--', alpha=0.5)
     
-    # 2. Embedding PCA
-    scatter_emb_pca = axes[0, 1].scatter(X_emb_pca[:, 0], X_emb_pca[:, 1], c=y_vis, cmap=cmap, s=12, alpha=0.7)
     axes[0, 1].set_title(f"Hyperfocus Embedding PCA ({dataset_name})", fontsize=12, fontweight='bold')
     axes[0, 1].grid(True, linestyle='--', alpha=0.5)
     
-    # 3. Raw Spectrum t-SNE
-    scatter_raw_tsne = axes[1, 0].scatter(X_raw_tsne[:, 0], X_raw_tsne[:, 1], c=y_vis, cmap=cmap, s=12, alpha=0.7)
     axes[1, 0].set_title(f"Raw Spectrum t-SNE ({dataset_name})", fontsize=12, fontweight='bold')
     axes[1, 0].grid(True, linestyle='--', alpha=0.5)
     
-    # 4. Embedding t-SNE
-    scatter_emb_tsne = axes[1, 1].scatter(X_emb_tsne[:, 0], X_emb_tsne[:, 1], c=y_vis, cmap=cmap, s=12, alpha=0.7)
     axes[1, 1].set_title(f"Hyperfocus Embedding t-SNE ({dataset_name})", fontsize=12, fontweight='bold')
     axes[1, 1].grid(True, linestyle='--', alpha=0.5)
     
-    # 범례(Legend) 만들기
-    handles, labels = scatter_emb_tsne.legend_elements(prop="colors")
-    fig.legend(handles, [f"Class {int(c)}" for c in unique_classes], loc='center right', bbox_to_anchor=(0.98, 0.5), title="Classes")
+    # 범례(Legend) 만들기 - 폰트 크기와 정렬 조정
+    fig.legend(handles=legend_handles, labels=[h.get_label() for h in legend_handles], loc='center right', bbox_to_anchor=(0.99, 0.5), title="Classes", fontsize=9)
     
     plt.tight_layout()
-    fig.subplots_adjust(right=0.90) # 범례를 위한 우측 마진
+    fig.subplots_adjust(right=0.80) # 범례를 위한 우측 마진
     
     img_save_path = f"images/{dataset_name.lower().replace(' ', '_')}_analysis.png"
     plt.savefig(img_save_path, dpi=150, bbox_inches='tight')
