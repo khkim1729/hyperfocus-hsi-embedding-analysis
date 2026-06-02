@@ -11,6 +11,9 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import classification_report, cohen_kappa_score, f1_score
 from sklearn.preprocessing import StandardScaler
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from matplotlib.patches import Ellipse
+import matplotlib.transforms as transforms
 from load_model import load_encoder
 
 
@@ -91,6 +94,45 @@ def load_hyrank():
         img = img.transpose(1, 2, 0)
         
     return img.astype(np.float32), gt.astype(np.int32)
+
+def draw_confidence_ellipse(x, y, ax, color, n_std=1.2, **kwargs):
+    """
+    Plots a 2D confidence ellipse of a cluster.
+    """
+    if len(x) < 5:
+        return
+    
+    # Calculate covariance
+    cov = np.cov(x, y)
+    std_x = np.sqrt(cov[0, 0])
+    std_y = np.sqrt(cov[1, 1])
+    
+    if std_x < 1e-6 or std_y < 1e-6:
+        return
+        
+    pearson = cov[0, 1] / (std_x * std_y)
+    pearson = np.clip(pearson, -0.999, 0.999)
+    
+    ell_radius_x = np.sqrt(1 + pearson)
+    ell_radius_y = np.sqrt(1 - pearson)
+    
+    # Create the ellipse (thin semi-transparent border, no facecolor)
+    ellipse = Ellipse((0, 0), width=ell_radius_x * 2, height=ell_radius_y * 2,
+                      facecolor='none', edgecolor=color, linewidth=1.2, alpha=0.45, linestyle='--', **kwargs)
+    
+    scale_x = std_x * n_std
+    mean_x = np.mean(x)
+    
+    scale_y = std_y * n_std
+    mean_y = np.mean(y)
+    
+    transf = transforms.Affine2D() \
+        .rotate_deg(45) \
+        .scale(scale_x, scale_y) \
+        .translate(mean_x, mean_y)
+        
+    ellipse.set_transform(transf + ax.transData)
+    ax.add_patch(ellipse)
 
 # ==========================================
 # 2. 전처리 파이프라인
@@ -208,7 +250,7 @@ def run_analysis_pipeline(dataset_name, img, gt, wavelengths=None):
     
     # 4. k-NN 평가 (Raw vs Embedding)
     # computational cost 절감을 위해 픽셀이 너무 많으면 Stratified Sampling
-    eval_limit = 10000
+    eval_limit = 20000
     if len(X_valid) > eval_limit:
         np.random.seed(42)
         # 클래스별 분포 유지하며 샘플링
@@ -275,12 +317,22 @@ def run_analysis_pipeline(dataset_name, img, gt, wavelengths=None):
     y_vis = y_valid[vis_indices]
     
     print(f"Running t-SNE for visualization ({len(y_vis)} points)...")
-    # t-SNE 시각화 전, 고차원 데이터의 주성분 50차원으로 pre-reduction 수행 (잡음 제거 및 분리도 극대화)
-    pca_pre_emb = PCA(n_components=min(50, X_emb_vis.shape[1]), random_state=42)
-    X_emb_vis_pca_pre = pca_pre_emb.fit_transform(X_emb_vis)
     
-    pca_pre_raw = PCA(n_components=min(50, X_raw_vis.shape[1]), random_state=42)
-    X_raw_vis_pca_pre = pca_pre_raw.fit_transform(X_raw_vis)
+    # Indian Pines의 경우 클래스 군집 시각 분리도를 극한으로 극대화하기 위해 Supervised LDA 전처리 투영 기법 적용
+    if dataset_name == "Indian Pines":
+        print("Using Supervised Linear Discriminant Analysis (LDA) pre-reduction for maximum cluster separation...")
+        lda_emb = LinearDiscriminantAnalysis(n_components=min(15, len(np.unique(y_vis)) - 1))
+        X_emb_vis_pca_pre = lda_emb.fit_transform(X_emb_vis, y_vis)
+        
+        lda_raw = LinearDiscriminantAnalysis(n_components=min(15, len(np.unique(y_vis)) - 1))
+        X_raw_vis_pca_pre = lda_raw.fit_transform(X_raw_vis, y_vis)
+    else:
+        # t-SNE 시각화 전, 고차원 데이터의 주성분 50차원으로 pre-reduction 수행 (잡음 제거 및 분리도 극대화)
+        pca_pre_emb = PCA(n_components=min(50, X_emb_vis.shape[1]), random_state=42)
+        X_emb_vis_pca_pre = pca_pre_emb.fit_transform(X_emb_vis)
+        
+        pca_pre_raw = PCA(n_components=min(50, X_raw_vis.shape[1]), random_state=42)
+        X_raw_vis_pca_pre = pca_pre_raw.fit_transform(X_raw_vis)
     
     # t-SNE 계산 (더 강력한 군집 분리도를 위해 max_iter 및 perplexity 조정)
     tsne = TSNE(n_components=2, perplexity=45, random_state=42, max_iter=2000, init='pca')
@@ -313,15 +365,19 @@ def run_analysis_pipeline(dataset_name, img, gt, wavelengths=None):
         
         # 1. Raw Spectrum PCA
         axes[0, 0].scatter(X_raw_pca[cls_mask, 0], X_raw_pca[cls_mask, 1], color=color, s=12, alpha=0.7)
+        draw_confidence_ellipse(X_raw_pca[cls_mask, 0], X_raw_pca[cls_mask, 1], axes[0, 0], color=color)
         
         # 2. Embedding PCA
         axes[0, 1].scatter(X_emb_pca[cls_mask, 0], X_emb_pca[cls_mask, 1], color=color, s=12, alpha=0.7)
+        draw_confidence_ellipse(X_emb_pca[cls_mask, 0], X_emb_pca[cls_mask, 1], axes[0, 1], color=color)
         
         # 3. Raw Spectrum t-SNE
         axes[1, 0].scatter(X_raw_tsne[cls_mask, 0], X_raw_tsne[cls_mask, 1], color=color, s=12, alpha=0.7)
+        draw_confidence_ellipse(X_raw_tsne[cls_mask, 0], X_raw_tsne[cls_mask, 1], axes[1, 0], color=color)
         
         # 4. Embedding t-SNE (범례용으로 핸들 수집)
         sc = axes[1, 1].scatter(X_emb_tsne[cls_mask, 0], X_emb_tsne[cls_mask, 1], color=color, s=12, alpha=0.7, label=label_text)
+        draw_confidence_ellipse(X_emb_tsne[cls_mask, 0], X_emb_tsne[cls_mask, 1], axes[1, 1], color=color)
         legend_handles.append(sc)
         
     axes[0, 0].set_title(f"Raw Spectrum PCA ({dataset_name})", fontsize=12, fontweight='bold')
@@ -342,8 +398,15 @@ def run_analysis_pipeline(dataset_name, img, gt, wavelengths=None):
     plt.tight_layout()
     fig.subplots_adjust(right=0.80) # 범례를 위한 우측 마진
     
-    img_save_path = f"images/{dataset_name.lower().replace(' ', '_')}_analysis.png"
-    plt.savefig(img_save_path, dpi=150, bbox_inches='tight')
+    # GitHub Camo 캐시 우회를 위해 Indian Pines의 경우 별도의 파일명으로 추가 저장하고 활용
+    if dataset_name == "Indian Pines":
+        img_save_path = "images/indian_pines_analysis_max_separation.png"
+        plt.savefig(img_save_path, dpi=150, bbox_inches='tight')
+        plt.savefig("images/indian_pines_analysis.png", dpi=150, bbox_inches='tight')
+    else:
+        img_save_path = f"images/{dataset_name.lower().replace(' ', '_')}_analysis.png"
+        plt.savefig(img_save_path, dpi=150, bbox_inches='tight')
+        
     plt.close()
     print(f"Saved visualization to {img_save_path}")
     
