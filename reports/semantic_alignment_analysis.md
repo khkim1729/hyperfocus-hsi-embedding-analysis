@@ -38,6 +38,19 @@
 * **Trees (수목)**: 전형적인 활성 식생 곡선으로, 가시광 녹색 대역의 미세한 피크와 Red-edge 대역의 가파른 반사율 급증(NIR Plateau)을 공유하여 다른 매질들과 명확히 차별화됩니다.
 * **Soils (토양) & Urban (도시 인공물)**: 수분이나 엽록소 흡수 구조가 배제되어 흡수 밴드가 완만하며, 인공 지물의 고유 분광 플랫화 및 완만히 우상향하는 토양 고유의 반사 특성이 대변됩니다.
 
+### 1.2 상세 물성 스펙트럼 비교 대조군 (Vegetation vs. Soil & Water vs. Urban)
+시인성을 한층 더 올리기 위해, 유사하거나 대조되는 물성 간의 세부 스펙트럼 차이를 아래와 같이 비교하였습니다.
+
+#### (1) 식생 대 토양 (Vegetation vs. Soil)
+식생과 토양은 초분광 분석에서 매우 중요한 대조군입니다. 식생(Trees, Riparian)은 엽록소 활성 반응(Red-edge)이 일어나 700nm 부근에서 급격한 우상향 곡선을 생성하는 반면, 토양(Bare Soil, Exposed Soils)은 이러한 생화학적 반응 흡수선이 없이 대단히 완만하고 지속적인 우상향(Linear-like increase) 거동만을 보여 기하학적 분포 특성이 아주 판이합니다.
+
+![Vegetation vs Soil Spectral Signatures](../images/cross_dataset/spectral_signatures_vegetation_soil.png)
+
+#### (2) 수체 대 도시 인공물 (Water vs. Urban)
+수체(Water)는 빛 에너지를 파장대 전역에서 약하게 반사하고 NIR 영역에서 완전 흡수해 버리는 반면, 아스팔트나 금속판 같은 도시 인공 지물(Asphalt, Painted Metal)은 상대적으로 가시광선-NIR 전 영역에 걸쳐 평탄하거나 높게 반사하는 특징을 가져 확연하게 서로 분리됩니다.
+
+![Water vs Urban Spectral Signatures](../images/cross_dataset/spectral_signatures_water_urban.png)
+
 ---
 
 ## 2. 정량적 정렬도 평가 (Silhouette & DAI)
