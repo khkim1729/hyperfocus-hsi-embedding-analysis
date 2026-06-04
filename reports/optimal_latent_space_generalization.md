@@ -23,6 +23,16 @@ Hyperfocus v71 인코더를 통과한 초분광 임베딩은 128차원의 비선
    $$\text{Maximize } J(W) = \frac{|W^T S_B W|}{|W^T S_W W|}$$
    이 파이프라인을 통해 지표 클래스들이 기하학적으로 가장 날카롭게 분리되는 **15차원 최적 잠재 공간(Optimal Latent Space)**이 정의됩니다.
 
+### 1.2 Indian Pines 핵심 클래스별 분광 시그니처 (Spectral Signatures)
+아래 그래프는 최적 잠재 공간 학습의 기준이 된 Indian Pines의 대표적인 지표 클래스들의 원시 분광 반사율 곡선입니다.
+
+![Indian Pines Spectral Signatures](../images/cross_dataset/spectral_signatures_ip.png)
+
+* **식생 클래스 (Corn, Soybeans, Grass, Woods, Alfalfa)**: 밴드 30~50 구간(Red-edge 대역)에서 급격한 반사율 상승이 나타나며, 전반적인 적외선 반사 고원(NIR plateau)의 모양과 엽록소 활성도에 따른 미세 밴드 깊이 차이를 보입니다.
+* **인공물 클래스 (Stone-Steel-Towers)**: 식생의 유기 물질 반응(Red-edge)이 배제되어, 전 파장 대역에 걸쳐 매우 평탄하고 일정한 반사 거동을 띠고 있습니다.
+* **LDA의 분류 결정 기저**:
+  지도학습된 LDA 모델은 이러한 식생 vs 인공물의 원초적 차이(1차 분리 축) 및 식생 내부의 잎 밀도와 엽록소 상태에 따른 변곡점 기울기 변화(2차~15차 분리 축)를 포착하여 15차원 초평면 분리 축을 유도합니다.
+
 ---
 
 ## 2. 정량적 일반화 성능 평가 (Zero-shot Domain Transfer)

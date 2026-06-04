@@ -36,12 +36,25 @@
 * **t-SNE 공간에서의 압도적인 도메인 격리 능력 (침입율 0% ~ 2.38%)**:
   반면, 지도학습 기반의 차원 축소(Linear Discriminant Analysis, 15차원)를 전처리 투영으로 결합한 **t-SNE(Joint) 공간**에서는 상황이 완전히 반전됩니다. Indian Pines의 농경 작물 분류를 위해 최적화된 LDA 축에 타 데이터셋을 투영하더라도, 이들은 비선형 다양체 학습(t-SNE)을 거치면서 기존 Indian Pines 클래스 신뢰 타원의 중심부(핵심 군집 영역)로부터 밀려나 **완벽히 분리된 고유한 다양체(Domain Isolation)**를 형성합니다. 특히 Hyperfocus Embedding은 노이즈가 강건하게 제어되어 있어, Pavia University/Centre나 HyRank의 복잡한 픽셀이 유입되어도 Indian Pines 16개 클래스 내부를 거의 침범하지 않고 외부 경계면이나 구석진 제3의 위치로 밀려나 겹치지 않습니다.
 
-### 2.2 식생 대 식생 간섭 (Indian Pines vs Botswana & HyRank)
+### 2.2 이종 데이터셋 간 원시 스펙트럼 중첩에 의한 간섭 현상
+아래의 그래프는 이종 데이터셋의 서로 다른 클래스들이 원시 스펙트럼 차원에서 얼마나 심한 중첩(Interference)을 일으키는지 보여주는 물리적 분석 예시입니다.
+
+![Spectral Interference](../images/cross_dataset/spectral_signatures_interference.png)
+
+* **원시 스펙트럼 차원에서의 취약성**:
+  Indian Pines의 핵심 식생 작물(Soybeans) 곡선과 Pavia University의 도심 인공물(Asphalt), 그리고 Botswana의 수체(Water) 곡선을 표준화된 밴드 축상에 함께 올려놓으면, 가시광선-근적외선(VNIR) 대역에서 상당수 겹치거나 평행한 곡선 거동을 보입니다. 
+  특히, 센서 노이즈나 조도 왜곡이 심할 경우 단순 밴드 반사율 값의 대소 관계(Raw Spectral Feature)는 서로를 완벽하게 구별하지 못하고 경계면이 모호해집니다. 이로 인해 Raw t-SNE 상에서 이종 데이터가 난입할 때 신뢰 타원 내부로 강하게 침입하는 다양체 오염(Manifold Contamination)이 발생하게 됩니다.
+* **임베딩 공간을 통한 극복**:
+  **Hyperfocus v71**은 비선형 인코더 아키텍처를 바탕으로 원시 스펙트럼 강도에만 의존하지 않고, 물리적 물성(흡수 밴드의 깊이, 변곡점의 변화율, 특정 대역 간 비율 등)에 대응하는 **고차원 다양체 특징**을 추출합니다. 이 덕분에 스펙트럼이 겹쳐 보이는 물질들도 임베딩 공간에서는 완전히 분리되어, 교차 데이터셋 투영 시 침입율을 0%에 가깝게 억제할 수 있게 됩니다.
+
+---
+
+### 2.3 식생 대 식생 간섭 (Indian Pines vs Botswana & HyRank)
 * **현상**: Botswana(사바나 습지 식생)와 HyRank(지중해 연안 침엽수/혼합림)는 식생 중심의 물리적 반사율 시그니처를 가집니다.
 * **분광학적 기작**: 엽록소 흡수와 근적외선 대역(NIR Plateau)의 높은 반사 거동이 Indian Pines 농경지와 중첩됩니다. 따라서 Raw 스펙트럼에서는 밴드가 노이즈에 노출되어 있어 t-SNE에서도 일부 미세 침입(최대 4.60%)이 발생합니다.
 * **Hyperfocus의 성능**: 반면, Hyperfocus 공간에서는 식생 밴드의 비선형 특징 표상이 매우 견고하게 분리되어 학습되었기 때문에, 이종 식생들의 유입에도 t-SNE 침입율을 **0.00% ~ 0.15% 수준**으로 완전히 방어해냅니다.
 
-### 2.3 식생 대 도심 비식생 격리 (Indian Pines vs Pavia University & Pavia Centre)
+### 2.4 식생 대 도심 비식생 격리 (Indian Pines vs Pavia University & Pavia Centre)
 * **현상**: Pavia University 및 Centre는 도심지의 아스팔트, 자갈, 붉은 기와, 지붕 시트지 등 인공 지물이 다수 포함되어 있습니다.
 * **분광학적 기작**: 도심 인공 지물은 식생 특유의 적색 경계(Red-edge) 현상이나 가파른 근적외선 반사 피크가 나타나지 않으며, 가시광 영역에서 평탄하거나 넓은 흡수 곡선을 보입니다. Pavia Centre의 경우 물(Water) 클래스도 존재합니다.
 * **Hyperfocus의 성능**: 이러한 확연한 스펙트럼 물리 차이로 인해, Pavia 데이터셋들은 Indian Pines의 농경 작물 타원 영역을 완벽하게 회피하여 PCA 및 t-SNE 상에서 멀리 고립되어 위치합니다. (t-SNE 침입율 0.05% ~ 2.38% 미만)
