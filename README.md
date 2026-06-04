@@ -20,6 +20,7 @@
 7. [설치 및 실행 방법](#7-설치-및-실행-방법)
 8. [교차 데이터셋 스펙트럼 임베딩 간섭 분석 (New Report)](#8-교차-데이터셋-스펙트럼-임베딩-간섭-분석-new-report)
 9. [교차 데이터셋 시맨틱 정렬 및 도메인 일반화 (New Report)](#9-교차-데이터셋-시맨틱-정렬-및-도메인-일반화-new-report)
+10. [최적 잠재 공간 설계 및 Zero-shot 일반화 (New Report)](#10-최적-잠재-공간-설계-및-zero-shot-일반화-new-report)
 
 ---
 
@@ -169,6 +170,12 @@ python3 analyze_semantic_alignment.py
 ```
 실행이 완료되면 `images/cross_dataset/` 디렉터리에 시맨틱 및 데이터셋별 시각화 결과가 생성되며, `results/semantic_alignment_summary.txt`에 평가지표 리포트가 요약됩니다.
 
+### 7.6 최적 잠재 공간 투영 및 일반화 분석 파이프라인 실행
+```bash
+python3 analyze_optimal_latent_space.py
+```
+실행이 완료되면 `images/cross_dataset/` 디렉터리에 각 데이터셋별 최적 잠재 공간에서의 클래스 분리도 시각화 결과가 생성되며, `results/optimal_latent_space_summary.txt`에 평가지표 리포트가 요약됩니다.
+
 ---
 
 ## 8. 교차 데이터셋 스펙트럼 임베딩 간섭 분석 (New Report)
@@ -188,3 +195,13 @@ python3 analyze_semantic_alignment.py
 도메인을 초월한 시맨틱 결합 거동 분석 이미지와 정량적 Silhouette 성능 평가 메트릭, 그리고 분광분석 전문가의 학술적 인사이트는 아래의 보고서 링크에서 확인하실 수 있습니다.
 
 👉 **[교차 데이터셋 시맨틱 정렬 및 도메인 일반화 상세 보고서 바로가기 (reports/semantic_alignment_analysis.md)](reports/semantic_alignment_analysis.md)**
+
+---
+
+## 10. 최적 잠재 공간 설계 및 Zero-shot 일반화 (New Report)
+
+Indian Pines의 16개 지표 클래스를 활용하여 클래스 경계 분리력을 극대화한 **최적 잠재 공간(Optimal Latent Space)**을 설계하고, 다른 이종 데이터셋(Botswana, Pavia U, Pavia C, HyRank)에 대해 사전 학습 없이 이를 Zero-shot으로 적용하여 도메인 전이성과 분류 일반화 성능을 정량 검증하였습니다.
+
+최적 잠재 공간 설계 이론, KNN 정확도 및 실루엣 비교 대조표, 2x3 통합 시각화 결과 및 분광학적 고찰은 아래 보고서에서 확인하실 수 있습니다.
+
+👉 **[최적 잠재 공간 설계 및 Zero-shot 일반화 상세 보고서 바로가기 (reports/optimal_latent_space_generalization.md)](reports/optimal_latent_space_generalization.md)**

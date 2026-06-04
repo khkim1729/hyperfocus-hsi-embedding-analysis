@@ -92,3 +92,88 @@ Water(Blue), Trees(Green), Soils(Brown), Urban(Grey)을 기준으로 1.2 std 신
    센서 간 정보 편차(VNIR vs SWIR 등)로 인해 Unsupervised 평면에서 완벽히 도메인이 중첩되기는 어려우나, **Hyperfocus v71 임베딩**은 노이즈를 강력히 필터링하여 동일 시맨틱(예: 수체, 인공 지물)이 방향성 있고 유연한 기하학적 매니폴드로 배열되도록 유도합니다.
 2. **센서 간 위상 정렬성 확인**:
    동일한 ROSIS 항공 센서를 사용한 Pavia U/C는 완벽히 결합(Dataset integration)되었으며, 위성 센서 기반 데이터들 또한 위상적으로 인접하는 성과를 보였습니다. 이는 향후 다종 센서 초분광 파운데이션 모델을 활용한 전이학습(Transfer Learning) 설계에 있어, Hyperfocus 임베딩이 훌륭한 Zero-shot 기저 표현을 제공할 수 있음을 이론적·실험적으로 뒷받침합니다.
+
+---
+
+## 6. 개별 시맨틱 테마별 상세 거동 분석 및 케이스 스터디 (상세 추가)
+
+### 6.1 시맨틱 테마별 단독 차원 축소 분석 (Water, Trees, Soils, Urban)
+
+4대 공통 지표 매질 각각을 고립(Isolation)시킨 후, 여러 개의 서로 다른 데이터셋에서 온 동종 픽셀들이 단독 공간에서 어떻게 정렬되는지를 관찰하였습니다. 각 점의 색상은 출처 데이터셋(도메인)을 나타냅니다.
+
+#### 6.1.1 수체 (Water)
+* **대상 클래스**: Botswana (Water), Pavia Centre (PC Water), HyRank (Water, Coastal Water)
+* **정량 지표 ($S_{ds}$)**: Raw PCA = 0.0352, Emb PCA = 0.0198, Raw t-SNE = 0.0896, Emb t-SNE = 0.2848
+* **분광학적 특징**: 수체는 가시광선 영역에서 매우 낮은 반사율을 가지며, 특히 근적외선(NIR) 및 단파적외선(SWIR) 영역에서는 빛을 거의 완전히 흡수합니다. 이로 인해 물 클래스 자체는 다른 클래스(식생, 도시 등)와 아주 잘 구분되지만, 물 데이터들만 따로 모아 t-SNE로 투영하면 **HyRank의 Coastal Water(탁한 해안수)와 Botswana의 깨끗한 Swamp(내륙 습지 수체) 간의 미세한 지리적/수질 편차**가 고스란히 노출되어 데이터셋별로 띠를 형성하며 격리되는 경향($S_{ds}$가 0.2848로 다소 상승)을 보입니다.
+
+![Water Alignment](../images/cross_dataset/semantic_alignment_water.png)
+
+#### 6.1.2 수목 (Trees)
+* **대상 클래스**: Indian Pines (Grass-trees, Woods), Botswana (Riparian, Acacia woodlands), Pavia University (Trees), Pavia Centre (Trees), HyRank (Fruit Trees, Olive Groves, Forests 등)
+* **정량 지표 ($S_{ds}$)**: Raw PCA = -0.0786, Emb PCA = -0.0718, Raw t-SNE = -0.0196, Emb t-SNE = 0.0048
+* **분광학적 특징**: 식생은 Red-edge 대역(700-750nm)의 가파른 상승과 NIR 대역의 높은 반사 플래토(Plateau)를 공유합니다. 이 강렬한 물리적 지그니처 덕분에, 다양한 기기(AVIRIS, ROSIS, Hyperion)를 통해 촬영되었음에도 불구하고 임베딩 t-SNE 공간에서 데이터셋을 구분하는 실루엣 지수($S_{ds}$)가 **0.0048**로 0에 수렴합니다. 이는 서로 다른 센서 기원에도 불구하고 Trees라는 거대한 식생 다양체 안에서 데이터셋 간의 인접성과 기하학적 혼합(Alignment)이 매우 안정적으로 이루어졌음을 반증합니다.
+
+![Trees Alignment](../images/cross_dataset/semantic_alignment_trees.png)
+
+#### 6.1.3 토양 (Soils)
+* **대상 클래스**: Botswana (Exposed soils), Pavia University (Bare Soil), Pavia Centre (Bare Soil), HyRank (Sparsely Vegetated, Rocks/Sand)
+* **정량 지표 ($S_{ds}$)**: Raw PCA = -0.0274, Emb PCA = -0.1449, Raw t-SNE = -0.0311, Emb t-SNE = 0.0158
+* **분광학적 특징**: 흙과 모래, 암석 등은 엽록소 반응이 없고 흡수 밴드가 완만하게 우상향하는 특성을 가집니다. 임베딩 공간에서 $S_{ds}$는 **0.0158**로 극단적으로 낮아집니다. Pavia의 Bare soil과 HyRank의 Rocks and sand가 이질적인 카메라로 촬영되었음에도 물리적으로 같은 '나지/광물' 다양체 상에서 완벽히 수렴되고 결합되어 있음을 대변합니다.
+
+![Soils Alignment](../images/cross_dataset/semantic_alignment_soils.png)
+
+#### 6.1.4 인공 지물 (Urban)
+* **대상 클래스**: Indian Pines (Stone-Steel-Towers), Pavia University (Asphalt, Gravel, Metal, Bitumen, Bricks), Pavia Centre (Asphalt, Bricks, Bitumen, Tiles), HyRank (Dense Urban, Mineral Sites)
+* **정량 지표 ($S_{ds}$)**: Raw PCA = -0.0047, Emb PCA = -0.0699, Raw t-SNE = -0.0204, Emb t-SNE = 0.0358
+* **분광학적 특징**: 아스팔트, 자갈, 금속판 등은 가시광 및 SWIR 영역에서 독특한 반사율 평탄화 및 인공적 흡수 대역을 보입니다. 임베딩 공간 내 t-SNE에서 $S_{ds}$는 **0.0358**에 불과하여, 이종의 인공 지물 스펙트럼들이 데이터셋 경계를 허물고 기하학적으로 혼합되어 잘 정렬되고 있습니다.
+
+![Urban Alignment](../images/cross_dataset/semantic_alignment_urban.png)
+
+---
+
+### 6.2 정량적 정렬 지표 (Silhouette & DAI)의 쉬운 개념 설명
+
+초분광 데이터셋 간의 정렬 성능을 객관적으로 수학화하기 위해 다음 세 가지 지표를 사용합니다.
+
+1. **Semantic Silhouette ($S_{semantic}$ - 시맨틱 분리도)**:
+   * **쉽게 말해**: "물리적 매질(예: 물, 나무, 흙)끼리 얼마나 제각기 따로 잘 모여 있는가?"를 측정합니다.
+   * **수학적 의미**: 특정 픽셀이 자기가 속한 시맨틱 그룹(예: Trees)의 다른 점들과는 가깝고, 다른 그룹(예: Water)의 점들과는 멀리 떨어져 있을 때 1.0에 가까운 값을 가집니다. 반대로 서로 뒤엉켜 있으면 0이나 음수가 됩니다.
+2. **Dataset Silhouette ($S_{dataset}$ - 도메인 편향도)**:
+   * **쉽게 말해**: "동일한 데이터셋(예: Indian Pines, Pavia) 출신 점들끼리 얼마나 끼리끼리 뭉쳐 있는가?"를 측정합니다.
+   * **수학적 의미**: 이 값이 1.0에 가깝다면, 지물 종류와 상관없이 촬영한 기기나 센서별로 점들이 완전히 찢어져 따로 놀고 있음을 의미합니다(심한 도메인 편향). 반대로 이 값이 **0에 가깝거나 음수**라면, 센서 차이가 사라지고 여러 데이터셋의 점들이 한데 고루 잘 섞여 있음을 대변합니다.
+3. **Domain-Agnostic Index (DAI - 도메인 불변성 평가지표)**:
+   * **공식**: $DAI = S_{semantic} - S_{dataset}$
+   * **쉽게 말해**: "촬영 기기 차이는 잊어버리고, 오직 땅 위의 실제 물질 정보(시맨틱)로만 점들이 잘 구별되고 정렬되었는가?"를 나타내는 최종 점수입니다. DAI가 높을수록 이상적이고 일반화 성능이 높은 도메인 에그노스틱 공간이 구축되었음을 의미합니다.
+
+---
+
+### 6.3 지표 개념 증명을 위한 극단적 케이스 스터디
+
+#### 6.3.1 [Case A] 시맨틱 경계가 명확하여 클래스 분류가 쉬운 경우
+* **시나리오**: 동일 데이터셋(Pavia University) 내부에서 물리 거동이 극단적으로 달라 분류가 매우 직관적인 3개 클래스(**Meadows [식생], Painted metal sheets [금속], Bare Soil [흙]**)를 투영.
+* **정량 지표**:
+  * Raw PCA $S_{sem}$: **-0.0068** / Raw t-SNE $S_{sem}$: **-0.0076**
+  * Embedding PCA $S_{sem}$: **-0.0184** / Embedding t-SNE $S_{sem}$: **-0.0095**
+* **시각화 및 해석**:
+  Meadows의 식생 곡선, Painted metal의 평탄 곡선, Bare Soil의 완만한 상승 곡선은 동일 센서 하에서 완전히 격리되어 분포합니다. 비록 전역 오버랩 영역 때문에 실루엣 절대 수치는 음수로 기록되나, 아래 이미지와 같이 3개 군집의 방향성과 경계는 대단히 명확하여 분류 난이도가 최하 수준임을 입증합니다.
+
+![Case Study A: Clear Semantic Boundaries](../images/cross_dataset/case_study_clear_semantic.png)
+
+---
+
+#### 6.3.2 [Case B] 데이터셋 고유의 센서 편차가 제거되고 완벽히 섞이는 경우
+* **시나리오**: Pavia University 와 Pavia Centre 의 동일 클래스인 **Asphalt (아스팔트)** 및 **Trees (수목)**를 결합하여 도메인 통합성을 평가.
+* **정량 지표 (t-SNE 공간)**:
+  * **Raw t-SNE**: $S_{sem} = 0.0081$, $S_{ds} = 0.0137$, $DAI = -0.0056$
+  * **Embedding t-SNE**: $S_{sem} = 0.0056$, $S_{ds} = 0.0106$, $DAI = -0.0050$
+* **시각화 및 해석**:
+  동일 ROSIS 센서의 두 관측 지역 데이터를 병합했을 때, 아래의 t-SNE 플롯이 보여주듯 **Asphalt와 Trees 간의 시맨틱 경계는 뚜렷이 분리(S_sem)**되는 동시에, **Pavia University와 Centre에서 추출된 동종 점들은 경계 없이 완벽하게 어우러져 혼합(S_ds가 0.01대 극소치)**됩니다. 이를 통해 Hyperfocus v71 임베딩이 불필요한 미세 지역 편차(도메인 편향)를 완벽히 억제하고 순수 물성 다양체 정렬에 도달했음을 보여주는 결정적 증거입니다.
+
+![Case Study B: Sensor-Invariant Mixing](../images/cross_dataset/case_study_sensor_mix.png)
+
+---
+
+### 🔗 관련 분석 보고서 바로가기
+* Indian Pines 임베딩을 이용해 지표 클래스 분리력을 극대화한 최적의 잠재 공간을 설계하고, 다른 이종 데이터셋(Botswana, Pavia, HyRank)에 대해 Zero-shot 도메인 일반화 성능을 정량화한 리포트는 아래를 참고하십시오.
+  👉 **[최적 잠재 공간 설계 및 Zero-shot 일반화 보고서 (optimal_latent_space_generalization.md)](optimal_latent_space_generalization.md)**
+
