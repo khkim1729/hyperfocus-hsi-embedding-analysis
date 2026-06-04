@@ -19,6 +19,7 @@
 6. [결론 및 분광분석 전문가적 고찰](#6-결론-및-분광분석-전문가적-고찰)
 7. [설치 및 실행 방법](#7-설치-및-실행-방법)
 8. [교차 데이터셋 스펙트럼 임베딩 간섭 분석 (New Report)](#8-교차-데이터셋-스펙트럼-임베딩-간섭-분석-new-report)
+9. [교차 데이터셋 시맨틱 정렬 및 도메인 일반화 (New Report)](#9-교차-데이터셋-시맨틱-정렬-및-도메인-일반화-new-report)
 
 ---
 
@@ -162,6 +163,12 @@ python3 analyze_cross_dataset.py
 ```
 실행이 완료되면 `images/cross_dataset/` 디렉터리에 각 케이스별 4-Panel 시각화 분석 결과가 생성되며, `results/cross_dataset_summary.txt`에 정량 지표 리포트가 요약됩니다.
 
+### 7.5 교차 데이터셋 시맨틱 정렬 분석 파이프라인 실행
+```bash
+python3 analyze_semantic_alignment.py
+```
+실행이 완료되면 `images/cross_dataset/` 디렉터리에 시맨틱 및 데이터셋별 시각화 결과가 생성되며, `results/semantic_alignment_summary.txt`에 평가지표 리포트가 요약됩니다.
+
 ---
 
 ## 8. 교차 데이터셋 스펙트럼 임베딩 간섭 분석 (New Report)
@@ -171,3 +178,13 @@ python3 analyze_cross_dataset.py
 각종 교차 투영 케이스(Case 0 ~ Case 11)별 4-Panel(Raw PCA, Emb PCA, Raw t-SNE, Emb t-SNE) 시각 자료와 정량적 물리 분석(Intrusion Rate 및 KNN Dataset Discriminability) 등 분광분석 전문가의 상세한 학술적 인사이트는 아래의 보고서 링크에서 즉시 확인하실 수 있습니다.
 
 👉 **[교차 데이터셋 스펙트럼 임베딩 간섭 분석 상세 보고서 바로가기 (reports/cross_dataset_embedding_analysis.md)](reports/cross_dataset_embedding_analysis.md)**
+
+---
+
+## 9. 교차 데이터셋 시맨틱 정렬 및 도메인 일반화 (New Report)
+
+서로 다른 센서와 기기 환경에서 촬영된 초분광 데이터셋 간에 공통적으로 존재하는 4대 시맨틱 테마(**Water, Trees, Soils, Urban**) 픽셀들이 **Hyperfocus v71 임베딩 공간**에서 어떻게 정렬되고 결합되는지 분석하였습니다.
+
+도메인을 초월한 시맨틱 결합 거동 분석 이미지와 정량적 Silhouette 성능 평가 메트릭, 그리고 분광분석 전문가의 학술적 인사이트는 아래의 보고서 링크에서 확인하실 수 있습니다.
+
+👉 **[교차 데이터셋 시맨틱 정렬 및 도메인 일반화 상세 보고서 바로가기 (reports/semantic_alignment_analysis.md)](reports/semantic_alignment_analysis.md)**
