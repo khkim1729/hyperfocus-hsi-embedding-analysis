@@ -18,6 +18,7 @@
 5. [정량적 분류 및 군집화 성능 평가 (Summary Metrics)](#5-정량적-분류-및-군집화-성능-평가-summary-metrics)
 6. [결론 및 분광분석 전문가적 고찰](#6-결론-및-분광분석-전문가적-고찰)
 7. [설치 및 실행 방법](#7-설치-및-실행-방법)
+8. [교차 데이터셋 스펙트럼 임베딩 간섭 분석 (New Report)](#8-교차-데이터셋-스펙트럼-임베딩-간섭-분석-new-report)
 
 ---
 
@@ -154,3 +155,19 @@ pip install torch pyyaml scipy scikit-learn matplotlib tifffile
 python3 analyze_hsi.py
 ```
 실행이 완료되면 `images/` 디렉터리에 각 데이터셋별 시각화 이미지가 생성되며, `results/summary_metrics.txt`에 정량 평가 결과가 수록됩니다.
+
+### 7.4 교차 데이터셋 간섭 분석 파이프라인 실행
+```bash
+python3 analyze_cross_dataset.py
+```
+실행이 완료되면 `images/cross_dataset/` 디렉터리에 각 케이스별 4-Panel 시각화 분석 결과가 생성되며, `results/cross_dataset_summary.txt`에 정량 지표 리포트가 요약됩니다.
+
+---
+
+## 8. 교차 데이터셋 스펙트럼 임베딩 간섭 분석 (New Report)
+
+기준 데이터셋인 **Indian Pines (농경지 작물)** 분류 도메인 영역에 신규 외부 데이터셋들(**Botswana 사바나 습지, Pavia University/Centre 도심 격리 지물, HyRank 지중해 연안 삼림**)이 결합 투영될 때 나타나는 스펙트럼 간섭 및 다양체 보존 효과를 심층 연구하였습니다.
+
+각종 교차 투영 케이스(Case 0 ~ Case 11)별 4-Panel(Raw PCA, Emb PCA, Raw t-SNE, Emb t-SNE) 시각 자료와 정량적 물리 분석(Intrusion Rate 및 KNN Dataset Discriminability) 등 분광분석 전문가의 상세한 학술적 인사이트는 아래의 보고서 링크에서 즉시 확인하실 수 있습니다.
+
+👉 **[교차 데이터셋 스펙트럼 임베딩 간섭 분석 상세 보고서 바로가기 (reports/cross_dataset_embedding_analysis.md)](reports/cross_dataset_embedding_analysis.md)**
