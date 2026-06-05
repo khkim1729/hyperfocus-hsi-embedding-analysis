@@ -123,25 +123,51 @@ def get_gcn_norm_adj(edges_src, edges_dst, num_nodes, device="cuda"):
 초분광 픽셀의 물리적 배치 특성에 근거하여 valid 픽셀을 노드($V$)로 지정하고 8-이웃 관계를 에지($E$)로 연결한 예시입니다 (Indian Pines의 $15 \times 15$ 서브패치 예시).
 
 ![Spatial Graph Nodes](../images/spatial_graph_nodes_visualization.png)
-* **설명**: 2차원 공간 격자 위에 지표 분류 정보(식생 및 도심 지물)를 띤 픽셀(노드)들이 배치되어 있으며, 인접한 8개의 이웃 노드들이 회색 선(에지)으로 치밀하게 엮여 그래프 신호 공간을 형성하고 있음을 시사합니다.
+* **설명**: 2차원 공간 격자 위에 지표 분류 정보(식생 및 도심 지물)를 띤 픽셀(노드)들이 배치되어 있으며, 인접한 8개의 이웃 노드들이 회색 선(에지)으로 치밀하게 엮여 그래프 신호 공간을 형성하고 있음을 시사합니다. 노란색으로 강조된 노드는 후술할 분석 대상인 (58, 58) 픽셀 노드입니다.
+
+#### 2.3.1 노드 물리적 스펙트럼 및 기초 모델 임베딩 근원 분석 (Node Source Analysis)
+그래프 노드가 실제로 어떠한 분광 특징 값과 임베딩 벡터로 채워지는지 규명하기 위하여, Indian Pines의 특정 식생 노드(좌표: 58, 58 | 지표 클래스: Soybean-no till)를 발췌하여 물리적 반사율 곡선과 Hyperfocus v71 임베딩 벡터를 매핑 분석하였습니다.
+
+![Node Source Analysis](../images/node_spectral_embedding_source.png)
+
+* **패널 A (Grid Node Location)**: 
+  격자 내 (58, 58) 위치에 존재하는 노란색 타겟 노드의 위치와 주변 8-이웃 관계를 나타냅니다.
+* **패널 B (Raw Spectral Signature - 원시 스펙트럼)**:
+  타겟 노드가 가진 AVIRIS 센서의 200개 파장대역 반사율 신호(Digital Number)입니다. 식생(Vegetation) 클래스 특유의 엽록소 반사율 특징이 그대로 관측됩니다.
+  * **식생 적색 경계(Red Edge)**: 약 700nm~800nm 부근에서 반사율이 가파르게 상승하여 5,000 수준을 초과하는 물리적 거동을 보여줍니다.
+  * **수분 흡수선(Water Absorption Band)**: 대기 중 수분 흡수로 신호가 0에 가깝게 수축하는 파장 대역(약 1400nm 및 1900nm 부근)에서 뚜렷한 흡수 계곡이 나타납니다.
+* **패널 C (Hyperfocus v71 Embedding - 기초 모델 임베딩)**:
+  패널 B의 200차원 Z-score 정규화 스펙트럼을 Hyperfocus v71 인코더에 통과시켜 도출한 **128차원 잠재 특징 벡터**입니다.
+  * **기초 모델의 표현력**: 기초 모델은 반사율 곡선의 비선형적 형상을 128개의 밀집(Dense) 차원에 효율적으로 보존하고 대기 왜곡이나 센서 노이즈 성분을 원천 필터링합니다. 이 128차원 벡터가 GNN 모델의 노드 피처($X_{emb}$)로 직접 입력되어 이웃 노드로 메시지가 전파됩니다.
 
 ### 2.4 상세 아키텍처 흐름 및 텐서 형태 변환 (Detailed Tensor Flow)
-GNN 모델 내부에서 레이어를 거치며 텐서의 차원 형태(Shape)가 물리적으로 어떻게 수축/투영되는지에 대한 흐름도입니다 (Indian Pines 데이터셋 $N=10,249$ 기준).
+GNN 모델 내부에서 레이어를 거치며 텐서의 차원 형태(Shape)가 물리적으로 어떻게 수축/투영되는지 **원시 스펙트럼(Raw)**과 **기초 모델 임베딩(Embedding)** 입력을 상호 비교 대조하여 나타냅니다 (Indian Pines 데이터셋 $N=10,249$ 기준).
 
 ![GNN Detailed Flow](../images/gnn_detailed_flow.png)
 
-* **입력 텐서**:
-  - 노드 피처 행렬 $X \in \mathbb{R}^{10249 \times 128}$ (Hyperfocus v71 임베딩 기준 128차원)
-  - 인접 에지 연결 구조 $E \in \mathbb{R}^{2 \times 73874}$
-  - 정규화된 희소 인접 행렬 $\tilde{A}_{norm} \in \mathbb{R}^{10249 \times 10249}$ (Sparse COO format)
-* **Layer 1 연산**:
-  - 가중치 행렬 $W^{(0)} \in \mathbb{R}^{128 \times 128}$ 과 피처 행렬의 행렬 곱 수행 $\to X W^{(0)} \in \mathbb{R}^{10249 \times 128}$
-  - 희소 행렬 곱(SparseMM)을 통한 이웃 노드 피처 평균 및 전파 $\to \tilde{A}_{norm} (X W^{(0)}) \in \mathbb{R}^{10249 \times 128}$
-  - ReLU 활성화 함수 및 Dropout(0.25) 규제 적용 $\to H^{(1)} \in \mathbb{R}^{10249 \times 128}$
-* **Layer 2 연산**:
-  - 가중치 행렬 $W^{(1)} \in \mathbb{R}^{128 \times 2}$ (Indian Pines의 2개 지표 클래스로 차원 축소 투영)
-  - 희소 행렬 곱(SparseMM) 연산 $\to \tilde{A}_{norm} (H^{(1)} W^{(1)}) \in \mathbb{R}^{10249 \times 2}$
-  - 최종 2차원 클래스 Logit 행렬 도출 $\to Logits \in \mathbb{R}^{10249 \times 2}$
+#### 2.4.1 원시 스펙트럼 입력 vs 임베딩 벡터 입력의 차원 비교 분석
+
+1. **입력 텐서 차원 ($X$)**
+   * **Raw Spectra Input**: $X_{raw} \in \mathbb{R}^{10249 \times 200}$ (200개 밴드 차원 입력)
+   * **Embedding Vector Input**: $X_{emb} \in \mathbb{R}^{10249 \times 128}$ (Hyperfocus v71 인코더의 128차원 임베딩 입력)
+   * **공간 연결 구조**: 두 케이스 모두 동일한 8-이웃 에지 인덱스 $E \in \mathbb{R}^{2 \times 73874}$ 및 희소 정규화 인접 행렬 $\tilde{A}_{norm} \in \mathbb{R}^{10249 \times 10249}$를 공유합니다.
+
+2. **레이어 1 연산 (GCN Conv Layer 1)**
+   * **Raw Spectra Input**:
+     - 가중치 파라미터: $W^{(0)} \in \mathbb{R}^{200 \times 128}$ (200차원을 128차원으로 투영)
+     - 연산식: $H^{(1)} = \text{ReLU}(\tilde{A}_{norm} (X_{raw} W^{(0)}))$ $\to H^{(1)} \in \mathbb{R}^{10249 \times 128}$
+   * **Embedding Vector Input**:
+     - 가중치 파라미터: $W^{(0)} \in \mathbb{R}^{128 \times 128}$ (128차원에서 128차원으로 선형 변환 및 정규화)
+     - 연산식: $H^{(1)} = \text{ReLU}(\tilde{A}_{norm} (X_{emb} W^{(0)}))$ $\to H^{(1)} \in \mathbb{R}^{10249 \times 128}$
+
+3. **레이어 2 연산 (GCN Conv Layer 2)**
+   * 두 케이스 모두 동일하게 $128$차원의 은닉 특징 $H^{(1)}$을 지표 클래스 수에 맞게 $2$차원으로 투영합니다.
+   - 가중치 파라미터: $W^{(1)} \in \mathbb{R}^{128 \times 2}$
+   - 연산식: $Logits = \tilde{A}_{norm} (H^{(1)} W^{(1)})$ $\to Logits \in \mathbb{R}^{10249 \times 2}$
+
+#### GCN vs GraphSAGE 차원 제어
+* **GCN**: 노드 피처 투영 후 희소 행렬 곱을 수행하여 형태를 $N \times D$로 균일하게 보존합니다.
+* **GraphSAGE**: 자신의 피처와 이웃 노드의 평균 피처를 Concat하므로 결합 차원이 2배로 늘어나며, 레이어 1 투영 시 $[N, 2 \times D_{in}] \times [2 \times D_{in}, D_{out}]$ 행렬 곱을 통해 공간 메시지 전파와 자기 특징 보존을 병렬로 최적화합니다.
 
 ### 2.5 정량적 성능 결과 (F1-Scores)
 아래 표는 원시 피처와 임베딩 피처를 각각 GNN 노드 피처로 입력했을 때의 성능 결과입니다.
