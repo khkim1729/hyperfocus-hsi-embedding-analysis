@@ -193,7 +193,7 @@ GNN 모델 내부에서 레이어를 거치며 텐서의 차원 형태(Shape)가
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | **Indian Pines** | $145 \times 145 \times 200$ | **10,249** | $10249 \times 200$ | $10249 \times 128$ | $10249 \times 128$ | $10249 \times 2$ | 2 (Veg, Urban) |
 | **Botswana** | $1476 \times 256 \times 145$ | **3,248** | $3248 \times 145$ | $3248 \times 128$ | $3248 \times 128$ | $3248 \times 3$ | 3 (Wat, Veg, Soil) |
-| **Pavia University** | $610 \times 340 \times 102$ | **39,332** | $39332 \times 102$ | $39332 \times 102$ | $39332 \times 128$ | $39332 \times 3$ | 3 (Veg, Soil, Urb) |
+| **Pavia University** | $610 \times 340 \times 102$ | **39,332** | $39332 \times 102$ | $39332 \times 128$ | $39332 \times 128$ | $39332 \times 3$ | 3 (Veg, Soil, Urb) |
 | **Pavia Centre** | $1096 \times 715 \times 102$ | **148,152** | $148152 \times 102$ | $148152 \times 128$ | $148152 \times 128$ | $148152 \times 4$ | 4 (Wat, Veg, Soil, Urb) |
 | **HyRank** | $250 \times 1376 \times 176$ | **20,024** | $20024 \times 176$ | $20024 \times 128$ | $20024 \times 128$ | $20024 \times 4$ | 4 (Wat, Veg, Soil, Urb) |
 
