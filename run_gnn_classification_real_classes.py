@@ -6,7 +6,7 @@ import numpy as np
 import scipy.io as sio
 import tifffile as tiff
 import matplotlib.pyplot as plt
-from sklearn.metrics import f1_score
+from sklearn.metrics import f1_score, precision_recall_fscore_support
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from load_model import load_encoder
@@ -18,6 +18,36 @@ from run_gnn_classification import (
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Using GNN Device for Real Classes: {DEVICE}")
+
+CLASS_NAMES = {
+    "Indian Pines": {
+        1: "Alfalfa", 2: "Corn-notill", 3: "Corn-mintill", 4: "Corn",
+        5: "Grass-pasture", 6: "Grass-trees", 7: "Grass-pasture-mowed", 8: "Hay-windrowed",
+        9: "Oats", 10: "Soybean-notill", 11: "Soybean-mintill", 12: "Soybean-clean",
+        13: "Wheat", 14: "Woods", 15: "Buildings-Grass-Trees-Drives", 16: "Stone-Steel-Towers"
+    },
+    "Botswana": {
+        1: "Water", 2: "Hippo grass", 3: "Floodplain grasses 1", 4: "Floodplain grasses 2",
+        5: "Reeds", 6: "Riparian", 7: "Firescar", 8: "Island interior",
+        9: "Acacia woodlands", 10: "Acacia shrublands", 11: "Acacia grasslands", 12: "Short mopane",
+        13: "Mixed mopane", 14: "Exposed soils"
+    },
+    "Pavia University": {
+        1: "Asphalt", 2: "Meadows", 3: "Gravel", 4: "Trees",
+        5: "Painted metal sheets", 6: "Bare Soil", 7: "Bitumen", 8: "Self-Blocking Bricks",
+        9: "Shadows"
+    },
+    "Pavia Centre": {
+        1: "Water", 2: "Trees", 3: "Asphalt", 4: "Self-Blocking Bricks",
+        5: "Bitumen", 6: "Tiles", 7: "Shadows", 8: "Meadows", 9: "Bare Soil"
+    },
+    "HyRank": {
+        1: "Dense urban fabric", 2: "Mineral extraction sites", 3: "Non-irrigated arable land", 4: "Fruit trees",
+        5: "Olive groves", 6: "Coniferous forest", 7: "Natural grassland", 8: "Sparsely vegetated areas",
+        9: "Water courses", 10: "Coastal lagoons", 11: "Estuaries", 12: "Sea and ocean",
+        13: "Water bodies", 14: "Herbaceous vegetation"
+    }
+}
 
 def main():
     datasets = ["Indian Pines", "Botswana", "Pavia University", "Pavia Centre", "HyRank"]
@@ -133,6 +163,21 @@ def main():
         sage_raw_full = f1_score(y_mapped, pred_sage_raw, average='macro')
         sage_emb_full = f1_score(y_mapped, pred_sage_emb, average='macro')
         
+        # Calculate class-specific metrics (GCN)
+        _, _, f1_raw_cls, _ = precision_recall_fscore_support(y_mapped[test_idx], pred_gcn_raw[test_idx], labels=range(num_classes), zero_division=0)
+        _, _, f1_emb_cls, _ = precision_recall_fscore_support(y_mapped[test_idx], pred_gcn_emb[test_idx], labels=range(num_classes), zero_division=0)
+        
+        cls_f1_list = []
+        for i, c in enumerate(unique_classes):
+            cls_name = CLASS_NAMES.get(name, {}).get(c, f"Class {c}")
+            cls_f1_list.append({
+                "class_id": int(c),
+                "class_name": cls_name,
+                "raw_f1": float(f1_raw_cls[i]),
+                "emb_f1": float(f1_emb_cls[i]),
+                "diff": float(f1_emb_cls[i] - f1_raw_cls[i])
+            })
+        
         results[name] = {
             "num_classes": num_classes,
             "num_nodes": num_nodes,
@@ -145,6 +190,7 @@ def main():
             "sage_emb_test": sage_emb_test,
             "sage_raw_full": sage_raw_full,
             "sage_emb_full": sage_emb_full,
+            "class_f1": cls_f1_list
         }
         
         print(f"GCN Raw Test Macro F1: {gcn_raw_test:.4f} | GCN Emb Test Macro F1: {gcn_emb_test:.4f}")
@@ -189,6 +235,16 @@ def main():
     report_path = "reports/gnn_real_classes_classification_analysis.md"
     print(f"Writing detailed results to {report_path}...")
     
+    # Build Class-specific markdown tables for each dataset
+    class_tables_md = ""
+    for dname in datasets:
+        class_tables_md += f"### 3.{datasets.index(dname)+1} {dname} 클래스별 GCN F1-Score 명세\n"
+        class_tables_md += f"| Class ID | Class Name | Raw GCN F1 (Test) | Emb GCN F1 (Test) | Improvement (Δ Test) |\n"
+        class_tables_md += f"| :--- | :--- | :---: | :---: | :---: |\n"
+        for item in results[dname]["class_f1"]:
+            class_tables_md += f"| {item['class_id']} | {item['class_name']} | {item['raw_f1']:.4f} | {item['emb_f1']:.4f} | **{item['diff']:+.4f}** |\n"
+        class_tables_md += "\n"
+
     report_content = f"""# 공간 그래프 신경망(GNN) 기반 원본 클래스(Real Classes) 분류 성능 분석 보고서
 
 본 보고서는 초분광 픽셀을 공동 의미 그룹(4-class)으로 매핑하지 않고, **각 데이터셋의 고유 원본 라벨 클래스(Real Classes)**를 대상으로 Graph Convolutional Network (GCN) 및 GraphSAGE 공간 그래프 신경망 분류를 진행한 성능 평가 결과입니다. 
@@ -200,16 +256,16 @@ def main():
 ## 1. 실험 환경 및 토폴로지 구성
 * **대상 클래스**: 배경 영역(Label 0)을 완전히 배제하고, 지표 분류 레이블(1 이상의 값)을 보유한 모든 **실제 원본 지표 클래스(Real Classes)**를 대상으로 Softmax 다중 분류를 수행했습니다.
 * **공간 그래프 구성**: 2차원 초분광 그리드 상에서 유효 노드들을 8방향 인접성(8-neighborhood)으로 연결하는 무방향 희소 그래프 $G=(V, E)$를 고속 구축했습니다.
-* **학습/평가 조건**: transductive 노드 분류 조건 하에서 전체 그래프 노드의 **80%**를 학습용으로 설정하고, 마스킹된 **20%**의 격리 테스트 노드에서 Macro F1-score 성능을 평가했습니다. (AdamW Optimizer, Weight Decay $1e-4$, Dropout 0.25 적용, 150 Epoch 학습)
+* **학습/평가 조건**: transductive 노드 분류 조건 하에서 전체 그래프 노드의 **80%**를 학습용으로 설정하고, 마스킹된 **20%**의 격리 테스트 노드에서 Macro F1-score 성능을 평가했습니다. (AdamW Optimizer, Weight Decay 1e-4$, Dropout 0.25 적용, 150 Epoch 학습)
 
 ### 데이터셋별 원본 그래프 규격 명세
-| Dataset | Real Classes Count | Total Labeled Nodes ($|V|$) | Total Graph Edges ($|E|$) | Train Nodes (80%) | Test Nodes (20%) |
+| Dataset | Real Classes Count | Total Labeled Nodes (V) | Total Graph Edges (E) | Train Nodes (80%) | Test Nodes (20%) |
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | **Indian Pines** | **16 클래스** | 10,249 | 73,874 | 8,199 | 2,050 |
 | **Botswana** | **14 클래스** | 3,248 | 19,372 | 2,598 | 650 |
 | **Pavia University** | **9 클래스** | 42,776 | 303,892 | 34,220 | 8,556 |
 | **Pavia Centre** | **9 클래스** | 148,152 | 1,070,444 | 118,521 | 29,631 |
-| **HyRank (Dioni)** | **14 클래스** | 20,024 | 130,228 | 16,019 | 4,005 |
+| **HyRank (Dioni)** | **12 클래스** | 20,024 | 130,228 | 16,019 | 4,005 |
 
 ---
 
@@ -239,7 +295,14 @@ def main():
 
 ---
 
-## 3. 시각화 분석 및 모델 평가
+## 3. 원본 세부 클래스별 분류 성능 상세 분석 (Class-specific Results)
+각 데이터셋에 분포하는 모든 원본 클래스들에 대해 GCN 모델 기준의 세부 F1-score 결과와 향상율을 나타냅니다.
+
+{class_tables_md}
+
+---
+
+## 4. 시각화 분석 및 모델 평가
 
 ![Real Class GNN Performance](../images/gnn_real_classes_performance.png)
 
