@@ -11,6 +11,7 @@
 * 📄 **[최적 잠재 공간 설계 및 Zero-shot 일반화 보고서 (optimal_latent_space_generalization.md)](reports/optimal_latent_space_generalization.md)**
 * 📄 **[제로샷 전이 및 그래프 공간 분류 성능 평가 보고서 (zeroshot_gnn_generalization_analysis.md)](reports/zeroshot_gnn_generalization_analysis.md)**
 * 📄 **[Hyperfocus v71 차원 변환 및 데이터 전처리 팩트체크 보고서 (hsi_dimension_factcheck.md)](reports/hsi_dimension_factcheck.md)**
+* 📄 **[GNN 기반 원본 클래스(Real Classes) 분류 성능 분석 보고서 (gnn_real_classes_classification_analysis.md)](reports/gnn_real_classes_classification_analysis.md)**
 
 ---
 
