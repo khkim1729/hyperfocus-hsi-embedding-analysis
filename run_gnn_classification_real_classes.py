@@ -177,11 +177,28 @@ def main():
                 "emb_f1": float(f1_emb_cls[i]),
                 "diff": float(f1_emb_cls[i] - f1_raw_cls[i])
             })
+
+        # Calculate class-specific metrics on Full dataset (GCN)
+        _, _, f1_raw_cls_full, _ = precision_recall_fscore_support(y_mapped, pred_gcn_raw, labels=range(num_classes), zero_division=0)
+        _, _, f1_emb_cls_full, _ = precision_recall_fscore_support(y_mapped, pred_gcn_emb, labels=range(num_classes), zero_division=0)
+        
+        cls_f1_full_list = []
+        for i, c in enumerate(unique_classes):
+            cls_name = CLASS_NAMES.get(name, {}).get(c, f"Class {c}")
+            cls_f1_full_list.append({
+                "class_id": int(c),
+                "class_name": cls_name,
+                "raw_f1": float(f1_raw_cls_full[i]),
+                "emb_f1": float(f1_emb_cls_full[i]),
+                "diff": float(f1_emb_cls_full[i] - f1_raw_cls_full[i])
+            })
         
         results[name] = {
             "num_classes": num_classes,
             "num_nodes": num_nodes,
             "num_edges": len(src_edges),
+            "train_nodes": len(train_idx),
+            "test_nodes": len(test_idx),
             "gcn_raw_test": gcn_raw_test,
             "gcn_emb_test": gcn_emb_test,
             "gcn_raw_full": gcn_raw_full,
@@ -190,8 +207,10 @@ def main():
             "sage_emb_test": sage_emb_test,
             "sage_raw_full": sage_raw_full,
             "sage_emb_full": sage_emb_full,
-            "class_f1": cls_f1_list
+            "class_f1": cls_f1_list,
+            "class_f1_full": cls_f1_full_list
         }
+        
         
         print(f"GCN Raw Test Macro F1: {gcn_raw_test:.4f} | GCN Emb Test Macro F1: {gcn_emb_test:.4f}")
         print(f"SAGE Raw Test Macro F1: {sage_raw_test:.4f} | SAGE Emb Test Macro F1: {sage_emb_test:.4f}")
@@ -235,15 +254,40 @@ def main():
     report_path = "reports/gnn_real_classes_classification_analysis.md"
     print(f"Writing detailed results to {report_path}...")
     
-    # Build Class-specific markdown tables for each dataset
+    # Build Class-specific markdown tables for each dataset (Test)
     class_tables_md = ""
     for dname in datasets:
-        class_tables_md += f"### 3.{datasets.index(dname)+1} {dname} 클래스별 GCN F1-Score 명세\n"
+        class_tables_md += f"### 3.{datasets.index(dname)+1} {dname} 클래스별 GCN F1-Score 명세 (Test)\n"
         class_tables_md += f"| Class ID | Class Name | Raw GCN F1 (Test) | Emb GCN F1 (Test) | Improvement (Δ Test) |\n"
         class_tables_md += f"| :--- | :--- | :---: | :---: | :---: |\n"
         for item in results[dname]["class_f1"]:
             class_tables_md += f"| {item['class_id']} | {item['class_name']} | {item['raw_f1']:.4f} | {item['emb_f1']:.4f} | **{item['diff']:+.4f}** |\n"
         class_tables_md += "\n"
+
+    # Build Class-specific markdown tables for each dataset (Full)
+    class_tables_full_md = ""
+    for dname in datasets:
+        class_tables_full_md += f"### 4.{datasets.index(dname)+1} {dname} 클래스별 GCN F1-Score 명세 (Full)\n"
+        class_tables_full_md += f"| Class ID | Class Name | Raw GCN F1 (Full) | Emb GCN F1 (Full) | Improvement (Δ Full) |\n"
+        class_tables_full_md += f"| :--- | :--- | :---: | :---: | :---: |\n"
+        for item in results[dname]["class_f1_full"]:
+            class_tables_full_md += f"| {item['class_id']} | {item['class_name']} | {item['raw_f1']:.4f} | {item['emb_f1']:.4f} | **{item['diff']:+.4f}** |\n"
+        class_tables_full_md += "\n"
+
+    total_nodes = sum(results[d]["num_nodes"] for d in datasets)
+    total_edges = sum(results[d]["num_edges"] for d in datasets)
+    total_train = sum(results[d]["train_nodes"] for d in datasets)
+    total_test = sum(results[d]["test_nodes"] for d in datasets)
+    
+    avg_gcn_raw_test = np.mean([results[d]['gcn_raw_test'] for d in datasets])
+    avg_gcn_emb_test = np.mean([results[d]['gcn_emb_test'] for d in datasets])
+    avg_gcn_raw_full = np.mean([results[d]['gcn_raw_full'] for d in datasets])
+    avg_gcn_emb_full = np.mean([results[d]['gcn_emb_full'] for d in datasets])
+    
+    avg_sage_raw_test = np.mean([results[d]['sage_raw_test'] for d in datasets])
+    avg_sage_emb_test = np.mean([results[d]['sage_emb_test'] for d in datasets])
+    avg_sage_raw_full = np.mean([results[d]['sage_raw_full'] for d in datasets])
+    avg_sage_emb_full = np.mean([results[d]['sage_emb_full'] for d in datasets])
 
     report_content = f"""# 공간 그래프 신경망(GNN) 기반 원본 클래스(Real Classes) 분류 성능 분석 보고서
 
@@ -256,16 +300,19 @@ def main():
 ## 1. 실험 환경 및 토폴로지 구성
 * **대상 클래스**: 배경 영역(Label 0)을 완전히 배제하고, 지표 분류 레이블(1 이상의 값)을 보유한 모든 **실제 원본 지표 클래스(Real Classes)**를 대상으로 Softmax 다중 분류를 수행했습니다.
 * **공간 그래프 구성**: 2차원 초분광 그리드 상에서 유효 노드들을 8방향 인접성(8-neighborhood)으로 연결하는 무방향 희소 그래프 $G=(V, E)$를 고속 구축했습니다.
-* **학습/평가 조건**: transductive 노드 분류 조건 하에서 전체 그래프 노드의 **80%**를 학습용으로 설정하고, 마스킹된 **20%**의 격리 테스트 노드에서 Macro F1-score 성능을 평가했습니다. (AdamW Optimizer, Weight Decay 1e-4$, Dropout 0.25 적용, 150 Epoch 학습)
+* **학습/평가 조건**: transductive 노드 분류 조건 하에서 전체 그래프 노드의 **80%**를 학습용으로 설정하고, 마스킹된 **20%**의 격리 테스트 노드에서 Macro F1-score 성능을 평가했습니다. (AdamW Optimizer, Weight Decay $1e-4$, Dropout 0.25 적용, 150 Epoch 학습)
 
-### 데이터셋별 원본 그래프 규격 명세
-| Dataset | Real Classes Count | Total Labeled Nodes (V) | Total Graph Edges (E) | Train Nodes (80%) | Test Nodes (20%) |
-| :--- | :---: | :---: | :---: | :---: | :---: |
-| **Indian Pines** | **16 클래스** | 10,249 | 73,874 | 8,199 | 2,050 |
-| **Botswana** | **14 클래스** | 3,248 | 19,372 | 2,598 | 650 |
-| **Pavia University** | **9 클래스** | 42,776 | 303,892 | 34,220 | 8,556 |
-| **Pavia Centre** | **9 클래스** | 148,152 | 1,070,444 | 118,521 | 29,631 |
-| **HyRank (Dioni)** | **12 클래스** | 20,024 | 130,228 | 16,019 | 4,005 |
+### 데이터셋별 원본 그래프 규격 및 GNN 성능 종합 명세 (Full Dataset 기준)
+| Dataset | Real Classes Count | Total Labeled Nodes (V) | Total Graph Edges (E) | Train Nodes (80%) | Test Nodes (20%) | GCN Raw F1 (Full) | GCN Emb F1 (Full) | SAGE Raw F1 (Full) | SAGE Emb F1 (Full) |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Indian Pines** | **16 클래스** | {results['Indian Pines']['num_nodes']:,} | {results['Indian Pines']['num_edges']:,} | {results['Indian Pines']['train_nodes']:,} | {results['Indian Pines']['test_nodes']:,} | {results['Indian Pines']['gcn_raw_full']:.4f} | {results['Indian Pines']['gcn_emb_full']:.4f} | {results['Indian Pines']['sage_raw_full']:.4f} | {results['Indian Pines']['sage_emb_full']:.4f} |
+| **Botswana** | **14 클래스** | {results['Botswana']['num_nodes']:,} | {results['Botswana']['num_edges']:,} | {results['Botswana']['train_nodes']:,} | {results['Botswana']['test_nodes']:,} | {results['Botswana']['gcn_raw_full']:.4f} | {results['Botswana']['gcn_emb_full']:.4f} | {results['Botswana']['sage_raw_full']:.4f} | {results['Botswana']['sage_emb_full']:.4f} |
+| **Pavia University** | **7 클래스** (이론상 9) | {results['Pavia University']['num_nodes']:,} (이론상 42,776) | {results['Pavia University']['num_edges']:,} | {results['Pavia University']['train_nodes']:,} (이론상 34,220) | {results['Pavia University']['test_nodes']:,} (이론상 8,556) | {results['Pavia University']['gcn_raw_full']:.4f} | {results['Pavia University']['gcn_emb_full']:.4f} | {results['Pavia University']['sage_raw_full']:.4f} | {results['Pavia University']['sage_emb_full']:.4f} |
+| **Pavia Centre** | **9 클래스** | {results['Pavia Centre']['num_nodes']:,} | {results['Pavia Centre']['num_edges']:,} | {results['Pavia Centre']['train_nodes']:,} | {results['Pavia Centre']['test_nodes']:,} | {results['Pavia Centre']['gcn_raw_full']:.4f} | {results['Pavia Centre']['gcn_emb_full']:.4f} | {results['Pavia Centre']['sage_raw_full']:.4f} | {results['Pavia Centre']['sage_emb_full']:.4f} |
+| **HyRank (Dioni)** | **12 클래스** | {results['HyRank']['num_nodes']:,} | {results['HyRank']['num_edges']:,} | {results['HyRank']['train_nodes']:,} | {results['HyRank']['test_nodes']:,} | {results['HyRank']['gcn_raw_full']:.4f} | {results['HyRank']['gcn_emb_full']:.4f} | {results['HyRank']['sage_raw_full']:.4f} | {results['HyRank']['sage_emb_full']:.4f} |
+| **합계 / 평균 (Total / Average)** | **-** | **{total_nodes:,}** (이론상 **224,449**) | **{total_edges:,}** (이론상 **1,597,810**) | **{total_train:,}** (이론상 **179,558**) | **{total_test:,}** (이론상 **44,892**) | **{avg_gcn_raw_full:.4f}** | **{avg_gcn_emb_full:.4f}** | **{avg_sage_raw_full:.4f}** | **{avg_sage_emb_full:.4f}** |
+
+* Pavia University의 경우, 실제 제공된 Pavia_gt.mat의 유효 노드 수는 39,332개(7개 클래스)이며, 이를 반영한 실제 총 노드 합계는 221,005개입니다. 이전 하드코딩 문서상의 이론적 수치인 42,776개(9개 클래스) 기준으로는 총 합계가 224,449개입니다.
 
 ---
 
@@ -281,7 +328,7 @@ def main():
 | **Pavia University** | {results['Pavia University']['gcn_raw_test']:.4f} | {results['Pavia University']['gcn_emb_test']:.4f} | {results['Pavia University']['gcn_raw_full']:.4f} | {results['Pavia University']['gcn_emb_full']:.4f} | **{results['Pavia University']['gcn_emb_test'] - results['Pavia University']['gcn_raw_test']:+.4f}** |
 | **Pavia Centre** | {results['Pavia Centre']['gcn_raw_test']:.4f} | {results['Pavia Centre']['gcn_emb_test']:.4f} | {results['Pavia Centre']['gcn_raw_full']:.4f} | {results['Pavia Centre']['gcn_emb_full']:.4f} | **{results['Pavia Centre']['gcn_emb_test'] - results['Pavia Centre']['gcn_raw_test']:+.4f}** |
 | **HyRank (Dioni)** | {results['HyRank']['gcn_raw_test']:.4f} | {results['HyRank']['gcn_emb_test']:.4f} | {results['HyRank']['gcn_raw_full']:.4f} | {results['HyRank']['gcn_emb_full']:.4f} | **{results['HyRank']['gcn_emb_test'] - results['HyRank']['gcn_raw_test']:+.4f}** |
-| **Average** | {np.mean([results[d]['gcn_raw_test'] for d in datasets]):.4f} | {np.mean([results[d]['gcn_emb_test'] for d in datasets]):.4f} | {np.mean([results[d]['gcn_raw_full'] for d in datasets]):.4f} | {np.mean([results[d]['gcn_emb_full'] for d in datasets]):.4f} | **{np.mean([results[d]['gcn_emb_test'] for d in datasets]) - np.mean([results[d]['gcn_raw_test'] for d in datasets]):+.4f}** |
+| **Average** | {avg_gcn_raw_test:.4f} | {avg_gcn_emb_test:.4f} | {avg_gcn_raw_full:.4f} | {avg_gcn_emb_full:.4f} | **{avg_gcn_emb_test - avg_gcn_raw_test:+.4f}** |
 
 ### 2.2 GraphSAGE 성능 결과
 | Dataset | Raw F1 (Test) | Emb F1 (Test) | Raw F1 (Full) | Emb F1 (Full) | Test Improvement (Δ) |
@@ -291,18 +338,25 @@ def main():
 | **Pavia University** | {results['Pavia University']['sage_raw_test']:.4f} | {results['Pavia University']['sage_emb_test']:.4f} | {results['Pavia University']['sage_raw_full']:.4f} | {results['Pavia University']['sage_emb_full']:.4f} | **{results['Pavia University']['sage_emb_test'] - results['Pavia University']['sage_raw_test']:+.4f}** |
 | **Pavia Centre** | {results['Pavia Centre']['sage_raw_test']:.4f} | {results['Pavia Centre']['sage_emb_test']:.4f} | {results['Pavia Centre']['sage_raw_full']:.4f} | {results['Pavia Centre']['sage_emb_full']:.4f} | **{results['Pavia Centre']['sage_emb_test'] - results['Pavia Centre']['sage_raw_test']:+.4f}** |
 | **HyRank (Dioni)** | {results['HyRank']['sage_raw_test']:.4f} | {results['HyRank']['sage_emb_test']:.4f} | {results['HyRank']['sage_raw_full']:.4f} | {results['HyRank']['sage_emb_full']:.4f} | **{results['HyRank']['sage_emb_test'] - results['HyRank']['sage_raw_test']:+.4f}** |
-| **Average** | {np.mean([results[d]['sage_raw_test'] for d in datasets]):.4f} | {np.mean([results[d]['sage_emb_test'] for d in datasets]):.4f} | {np.mean([results[d]['sage_raw_full'] for d in datasets]):.4f} | {np.mean([results[d]['sage_emb_full'] for d in datasets]):.4f} | **{np.mean([results[d]['sage_emb_test'] for d in datasets]) - np.mean([results[d]['sage_raw_test'] for d in datasets]):+.4f}** |
+| **Average** | {avg_sage_raw_test:.4f} | {avg_sage_emb_test:.4f} | {avg_sage_raw_full:.4f} | {avg_sage_emb_full:.4f} | **{avg_sage_emb_test - avg_sage_raw_test:+.4f}** |
 
 ---
 
-## 3. 원본 세부 클래스별 분류 성능 상세 분석 (Class-specific Results)
-각 데이터셋에 분포하는 모든 원본 클래스들에 대해 GCN 모델 기준의 세부 F1-score 결과와 향상율을 나타냅니다.
+## 3. 원본 세부 클래스별 분류 성능 상세 분석 (Class-specific Results - Test)
+각 데이터셋에 분포하는 모든 원본 클래스들에 대해 GCN 모델 기준의 격리 테스트 노드(Test) 세부 F1-score 결과와 향상율을 나타냅니다.
 
 {class_tables_md}
 
 ---
 
-## 4. 시각화 분석 및 모델 평가
+## 4. 전체 데이터셋 대상 원본 세부 클래스별 분류 성능 상세 분석 (Class-specific Results - Full)
+각 데이터셋에 분포하는 모든 원본 클래스들에 대해 GCN 모델 기준의 전체 그래프 노드(Full) 세부 F1-score 결과와 향상율을 나타냅니다.
+
+{class_tables_full_md}
+
+---
+
+## 5. 시각화 분석 및 모델 평가
 
 ![Real Class GNN Performance](../images/gnn_real_classes_performance.png)
 
@@ -318,7 +372,7 @@ def main():
 * **Hyperfocus v71 README**:
   👉 **[README.md](../README.md)**
 * **GNN 제로샷 성능 종합 보고서**:
-  👉 **[제로샷 교차 데이터셋 전이 및 공간 그래프 신경망 성능 평가 보고서 (zeroshot_gnn_generalization_analysis.md)](zeroshot_gnn_generalization_analysis.md)**
+  👉 **[제로샷 교차 데이터셋 전이 및 공간 그래프 신경망 성능 평가 보고서 (zeroshot_generalization_analysis.md)](zeroshot_generalization_analysis.md)**
 """
     
     with open(report_path, "w", encoding="utf-8") as f:
