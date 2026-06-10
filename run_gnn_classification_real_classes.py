@@ -99,10 +99,11 @@ def main():
         else:
             X_emb = extract_embeddings(X_norm, band_dim=C, device=DEVICE)
             
-        # Standardize Raw and Embedding features
-        scaler = StandardScaler()
-        X_raw_s = scaler.fit_transform(X_norm)
-        X_emb_s = scaler.fit_transform(X_emb)
+        # Standardize Raw and Embedding features using separate scalers
+        scaler_raw = StandardScaler()
+        X_raw_s = scaler_raw.fit_transform(X_norm)
+        scaler_emb = StandardScaler()
+        X_emb_s = scaler_emb.fit_transform(X_emb)
         
         # Build Spatial Graph
         src_edges, dst_edges = build_spatial_adjacency((H, W), valid_coords)
@@ -151,6 +152,56 @@ def main():
         sage_emb = GraphSAGE(in_dim=128, hidden_dim=128, num_classes=num_classes).to(DEVICE)
         out_sage_emb = train_gnn(sage_emb, x_emb_t, y_t, adj_sage, train_idx)
         pred_sage_emb = np.argmax(out_sage_emb, axis=1)
+        
+        # Save checkpoints
+        ckpt_dir = "checkpoints/gnn_real_classes"
+        os.makedirs(ckpt_dir, exist_ok=True)
+        
+        torch.save({
+            "model_state_dict": gcn_emb.state_dict(),
+            "scaler_mean": scaler_emb.mean_,
+            "scaler_scale": scaler_emb.scale_,
+            "class_to_idx": class_to_idx,
+            "unique_classes": unique_classes.tolist(),
+            "num_classes": num_classes,
+            "in_dim": 128,
+            "hidden_dim": 128
+        }, os.path.join(ckpt_dir, f"{name.lower().replace(' ', '_')}_gcn_emb.pth"))
+        
+        torch.save({
+            "model_state_dict": gcn_raw.state_dict(),
+            "scaler_mean": scaler_raw.mean_,
+            "scaler_scale": scaler_raw.scale_,
+            "class_to_idx": class_to_idx,
+            "unique_classes": unique_classes.tolist(),
+            "num_classes": num_classes,
+            "in_dim": C,
+            "hidden_dim": 128
+        }, os.path.join(ckpt_dir, f"{name.lower().replace(' ', '_')}_gcn_raw.pth"))
+        
+        torch.save({
+            "model_state_dict": sage_emb.state_dict(),
+            "scaler_mean": scaler_emb.mean_,
+            "scaler_scale": scaler_emb.scale_,
+            "class_to_idx": class_to_idx,
+            "unique_classes": unique_classes.tolist(),
+            "num_classes": num_classes,
+            "in_dim": 128,
+            "hidden_dim": 128
+        }, os.path.join(ckpt_dir, f"{name.lower().replace(' ', '_')}_sage_emb.pth"))
+        
+        torch.save({
+            "model_state_dict": sage_raw.state_dict(),
+            "scaler_mean": scaler_raw.mean_,
+            "scaler_scale": scaler_raw.scale_,
+            "class_to_idx": class_to_idx,
+            "unique_classes": unique_classes.tolist(),
+            "num_classes": num_classes,
+            "in_dim": C,
+            "hidden_dim": 128
+        }, os.path.join(ckpt_dir, f"{name.lower().replace(' ', '_')}_sage_raw.pth"))
+        
+        print(f"Saved GNN model checkpoints for {name} in {ckpt_dir}/")
         
         # Calculate Macro F1
         gcn_raw_test = f1_score(y_mapped[test_idx], pred_gcn_raw[test_idx], average='macro')
@@ -314,6 +365,16 @@ def main():
 
 * Pavia University의 경우, 실제 제공된 Pavia_gt.mat의 유효 노드 수는 39,332개(7개 클래스)이며, 이를 반영한 실제 총 노드 합계는 221,005개입니다. 이전 하드코딩 문서상의 이론적 수치인 42,776개(9개 클래스) 기준으로는 총 합계가 224,449개입니다.
 
+### 1.1 GNN 성능 지표가 비정상적으로 높게 나오는 원인 분석 (공간적 자기상관 및 데이터 누수)
+본 실험 및 기존 초분광 GNN 관련 문헌들에서 F1 스코어가 0.98~1.00에 달할 정도로 극도로 높게 나오는 현상은 다음과 같은 두 가지 요인에서 기인합니다.
+
+1. **공간적 자기상관성 (Spatial Autocorrelation)**: 
+   초분광 지상 검증(Ground Truth) 데이터셋은 동일한 지표 지물(예: 옥수수 밭, 아스팔트 도로)이 인접한 격자 픽셀 형태로 뭉쳐서 분포합니다. 즉, 물리적으로 바로 옆에 위치한 픽셀은 높은 확률로 동일한 클래스에 속하며, 반사율 특성 또한 거의 동일합니다.
+2. **트랜스덕티브 노드 분류에서의 정보 누수 (Transductive Label Leakage)**:
+   학습 시 단일 초분광 2D 그리드에서 그래프 $G=(V,E)$를 구축한 뒤, 임의로 80%의 노드를 학습(Train)으로 지정하고 20%의 노드를 테스트(Test)로 마스킹합니다.
+   GNN은 인접 행렬 $\tilde{{A}}_{{norm}}$을 통한 메시지 패싱(Message Passing) 연산으로 주변 이웃 노드들의 특징을 가중 합산합니다. 8방향 인접 그래프 구조상에서 **20%의 테스트 노드 주변에는 거의 항상 80%에 속하는 학습 노드들이 밀접해 존재**하므로, 메시지 패싱 과정에서 사실상 학습 노드의 정답 레이블 정보와 고도의 유사도가 주입되어 분류 경계가 극도로 뚜렷해집니다.
+   - **결론**: 따라서 이 높은 성능 지표는 모델이 일반적인 Out-of-Distribution(OOD) 일반화 능력을 갖추었음을 시사하는 것이 아니라, **밀접한 지리 공간 데이터 내에서의 공간 스무딩/보간(Spatial Interpolation) 성능이 극대화되었음**을 의미합니다.
+
 ---
 
 ## 2. GNN 원본 클래스 분류 정량적 성능 결과 (F1-Scores)
@@ -368,9 +429,43 @@ def main():
 
 ---
 
+## 6. GNN 학습 모델 체크포인트 및 표준화 스케일러 저장 경로
+각 데이터셋별로 학습 완료된 GNN 모델 및 StandardScaler 정보가 다음 경로에 저장되어 교차 데이터셋 추론에 즉시 재사용할 수 있습니다.
+
+* **저장 디렉터리**: `checkpoints/gnn_real_classes/`
+* **체크포인트 파일 정보**:
+  - **Indian Pines**:
+    - GCN Embedding: `indian_pines_gcn_emb.pth`
+    - GraphSAGE Embedding: `indian_pines_sage_emb.pth`
+    - GCN Raw: `indian_pines_gcn_raw.pth`
+    - GraphSAGE Raw: `indian_pines_sage_raw.pth`
+  - **Botswana**:
+    - GCN Embedding: `botswana_gcn_emb.pth`
+    - GraphSAGE Embedding: `botswana_sage_emb.pth`
+    - GCN Raw: `botswana_gcn_raw.pth`
+    - GraphSAGE Raw: `botswana_sage_raw.pth`
+  - **Pavia University**:
+    - GCN Embedding: `pavia_university_gcn_emb.pth`
+    - GraphSAGE Embedding: `pavia_university_sage_emb.pth`
+    - GCN Raw: `pavia_university_gcn_raw.pth`
+    - GraphSAGE Raw: `pavia_university_sage_raw.pth`
+  - **Pavia Centre**:
+    - GCN/SAGE Raw & Emb (`pavia_centre_*.pth` 형태로 총 4개 파일 저장)
+  - **HyRank**:
+    - GCN/SAGE Raw & Emb (`hyrank_*.pth` 형태로 총 4개 파일 저장)
+
+* **체크포인트 저장 구조**:
+  - `model_state_dict`: GNN 모델 가중치 매핑
+  - `scaler_mean` & `scaler_scale`: 소스 도메인 학습 시 사용된 StandardScaler 값 (교차 도메인 추론 시 입력 피처 정규화에 사용)
+  - `class_to_idx` & `unique_classes`: 클래스 레이블 맵 및 원본 클래스 고유 번호 목록
+
+---
+
 ### 🔗 관련 문서 바로가기
 * **Hyperfocus v71 README**:
   👉 **[README.md](../README.md)**
+* **GNN 교차 데이터셋 제로샷 추론 분석 보고서**:
+  👉 **[교차 데이터셋 GNN 모델 제로샷 추론 분석 보고서 (gnn_cross_dataset_inference_analysis.md)](gnn_cross_dataset_inference_analysis.md)**
 * **GNN 제로샷 성능 종합 보고서**:
   👉 **[제로샷 교차 데이터셋 전이 및 공간 그래프 신경망 성능 평가 보고서 (zeroshot_generalization_analysis.md)](zeroshot_generalization_analysis.md)**
 """
